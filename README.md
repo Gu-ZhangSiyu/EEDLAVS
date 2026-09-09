@@ -3,7 +3,6 @@
 v3.0 Packaging Instructions
 
 1. Open cmd and navigate to the project directory
-cd /d "C:\Users\dptuz\Documents\Codex\v3.0"
 2. Clean up old PyInstaller generated files only (if present)
 if exist build rd /s /q build
 if exist dist rd /s /q dist
@@ -19,3 +18,5 @@ Do not execute pip freeze > requirements.txt as it will overwrite the original p
 4. Package
 python -m PyInstaller --clean --noconfirm --onefile --windowed --name EEDLAVS --paths=. --add-data "TarGo_v1.3.html;." main.py
 5. Finished. Executable generated: dist\EEDLAVS.exe
+
+
