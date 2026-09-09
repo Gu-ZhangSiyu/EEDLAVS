@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EEDL TraGo v1.3</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050505; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; }
+        #canvas-container { width: 100vw; height: 100vh; display: block; }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #1a1a1a; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+        .glass-panel {
+            background: rgba(20, 20, 25, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            transition: all 0.2s;
+        }
+        .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn-primary:active { transform: translateY(0); }
+        .btn-primary:disabled { background: #333; cursor: not-allowed; filter: none; }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+
+        /* Scale Button Styles */
+        .btn-group {
+            display: flex;
+            background: #1f2937;
+            border-radius: 0.375rem;
+            padding: 0.125rem;
+        }
+        .btn-scale {
+            flex: 1;
+            padding: 0.25rem;
+            font-size: 0.75rem;
+            text-align: center;
+            border-radius: 0.25rem;
+            color: #9ca3af;
+            transition: all 0.2s;
+        }
+        .btn-scale.active {
+            background: #3b82f6;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        .btn-scale:hover:not(.active) {
+            color: white;
+            background: rgba(255,255,255,0.05);
+        }
+
+        .section-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6b7280;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .status-icon {
+            font-size: 1.1rem;
+            margin-left: 8px;
+            font-weight: bold;
+        }
+
+        input[type="range"] {
+            accent-color: #3b82f6;
+        }
+        
+        select {
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%239ca3af%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.7rem top 50%;
+            background-size: 0.65rem auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+    <div class="absolute top-4 left-4 w-80 glass-panel rounded-xl p-5 flex flex-col gap-3 text-sm z-10 max-h-[90vh] overflow-y-auto">
+        <h1 class="text-lg font-bold text-white border-b border-gray-700 pb-2 flex justify-between items-center">
+            <span>FRC Particle Trajectory</span>
+            <span class="text-xs text-gray-400 font-normal">v1.4</span>
+        </h1>
+        <div class="section-title">Particle Data (X,Y,Z)</div>
+        <div class="space-y-3">
+            <div>
+                <label class="block text-xs font-semibold text-cyan-400 mb-1">Ion Trajectory File</label>
+                <div class="file-input-wrapper">
+                    <input type="file" id="ionFile" accept=".txt" class="block w-full text-xs text-gray-300 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-cyan-800 file:text-cyan-100 hover:file:bg-cyan-700 cursor-pointer bg-cyan-900/50 rounded-md border border-cyan-800/50"/>
+                    <span id="iconIon" class="status-icon text-red-500">✕</span>
+                </div>
+                <div id="ionStatus" class="text-[10px] text-gray-500 mt-1 pl-1">Not loaded</div>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-yellow-400 mb-1">Electron Trajectory File</label>
+                <div class="file-input-wrapper">
+                    <input type="file" id="electronFile" accept=".txt" class="block w-full text-xs text-gray-300 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-yellow-800 file:text-yellow-100 hover:file:bg-yellow-700 cursor-pointer bg-yellow-900/50 rounded-md border border-yellow-800/50"/>
+                    <span id="iconElec" class="status-icon text-red-500">✕</span>
+                </div>
+                <div id="electronStatus" class="text-[10px] text-gray-500 mt-1 pl-1">Not loaded</div>
+            </div>
+            
+            <div class="mt-1 pl-1 text-[10px] text-gray-500 italic border-l-2 border-gray-700">
+                Note: Auto-adjust animation duration based on data points, max 10,000,000 steps.
+            </div>
+
+            <div class="pt-2">
+                <div class="flex justify-between text-xs text-gray-400 mb-1">
+                    <span>Particle Brightness</span>
+                    <span id="partOpacityVal">Standard</span>
+                </div>
+                <input type="range" id="partOpacitySlider" min="0" max="2" value="1" step="1" class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+            </div>
+        </div>
+
+        <div class="section-title">Background Field (Matrix 65x257)</div>
+        <div class="space-y-3">
+            <div class="text-[10px] text-gray-400 mb-1">Row: R (0~0.3875m), Column: Z (-1~1m)</div>
+            
+            <div>
+                <label class="block text-xs font-semibold text-gray-300 mb-1">Bz Matrix File</label>
+                <div class="file-input-wrapper">
+                    <input type="file" id="bzFile" accept=".txt" class="block w-full text-xs text-gray-300 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-green-800 file:text-green-100 hover:file:bg-green-700 cursor-pointer bg-green-900/50 rounded-md border border-green-800/50"/>
+                    <span id="iconBz" class="status-icon text-red-500">✕</span>
+                </div>
+                <div class="mt-1 pl-1 text-[10px] text-gray-500 italic border-l-2 border-gray-700">
+					Note: Macroscopic topology observation.
+                </div>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-semibold text-gray-400 mb-1">Color Scheme</label>
+                <select id="colormapSelect" class="w-full bg-gray-900 border border-gray-700 text-gray-300 text-xs rounded-md px-2 py-1.5 focus:outline-none focus:border-blue-500">
+                    <option value="gamma">High Contrast (Gamma Encoded)</option>
+                    <option value="jet">Real Value (Linear Jet)</option>
+                </select>
+            </div>
+
+            <div>
+                <div class="flex justify-between text-xs text-gray-400 mb-1">
+                    <span>Field Transparency (Alpha)</span>
+                    <span id="fieldOpacityVal">0.4</span>
+                </div>
+                <input type="range" id="fieldOpacitySlider" min="0.2" max="1.0" value="0.4" step="0.2" class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+            </div>
+
+            <div class="pt-1 border-t border-gray-800">
+                <div id="fieldStatus" class="text-[10px] text-gray-500 mb-2">Waiting For Data...</div>
+                <div class="flex items-center justify-between">
+                    <span class="text-xs text-gray-400">Show Background Field Slice</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="chkShowField" checked class="sr-only peer" disabled>
+                        <div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-title">Playback control</div>
+        <div class="mb-3">
+            <div class="flex justify-between text-xs text-gray-400 mb-1">
+                <span>Time Scale Separation</span>
+                <span class="text-xs text-cyan-400" id="scaleInfo">Sync (1:1)</span>
+            </div>
+            <div class="btn-group">
+                <button class="btn-scale active" data-scale="0" onclick="setSpeedScale(0)">1x<br><span class="text-[9px] opacity-60">Sync</span></button>
+                <button class="btn-scale" data-scale="1" onclick="setSpeedScale(1)">100x<br><span class="text-[9px] opacity-60">Ion/10 e*10</span></button>
+                <button class="btn-scale" data-scale="2" onclick="setSpeedScale(2)">10000x<br><span class="text-[9px] opacity-60">Ion/100 e*100</span></button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+            <button id="btnStart" disabled class="btn-primary py-2 rounded-md font-bold text-white shadow-lg">START</button>
+            <button id="btnStop" disabled class="btn-danger py-2 rounded-md font-bold text-white shadow-lg hover:brightness-110 transition">STOP</button>
+        </div>
+        
+        <button id="btnDemo" class="text-xs text-gray-500 underline hover:text-white text-center mt-1">Generate random demonstration data</button>
+
+        <div class="space-y-3 pt-2 border-t border-gray-700 mt-2">
+            <div class="flex justify-between text-xs text-gray-400">
+                <span>Master Time Step</span>
+                <span id="stepDisplay">0 / 1000</span>
+            </div>
+            <input type="range" id="progressSlider" min="0" max="1000" value="0" class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+            
+            <div class="flex items-center justify-between">
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" id="chkLoop" checked class="form-checkbox h-4 w-4 text-blue-600 rounded bg-gray-700 border-none">
+                    <span class="text-xs text-gray-300">Loop Playback</span>
+                </label>
+            </div>
+
+             <div>
+                <div class="flex justify-between text-xs text-gray-400 mb-1">
+                    <span>Playback Rate (Relative)</span>
+                    <span id="speedVal">1.0x</span>
+                </div>
+                <input type="range" id="speedSlider" min="0" max="4" value="2" step="1" class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+            </div>
+        </div>
+    </div>
+
+    <div class="absolute bottom-4 right-4 glass-panel rounded-lg p-3 text-xs z-10">
+        <div class="flex items-center gap-2 mb-1">
+            <div class="w-3 h-3 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]"></div>
+            <span class="text-gray-300">Ion</span>
+        </div>
+        <div class="flex items-center gap-2 mb-1">
+            <div class="w-3 h-3 rounded-full bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.8)]"></div>
+            <span class="text-gray-300">Electron</span>
+        </div>
+        <div class="flex items-center gap-2 mb-1">
+            <div class="w-3 h-3 border border-gray-500"></div>
+            <span class="text-gray-300">Device (φ0.775, L2.0)</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <div id="legendColor" class="w-3 h-3 bg-gradient-to-r from-blue-700 via-white to-red-600 border border-gray-600"></div>
+            <span id="legendText" class="text-gray-300">Background Field</span>
+        </div>
+    </div>
+
+    <script>
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050505, 0.15);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100);
+        camera.position.set(2.5, 1.5, 2.5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        const ambientLight = new THREE.AmbientLight(0x404040, 2);
+        scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0xffffff, 1, 10);
+        pointLight.position.set(2, 2, 2);
+        scene.add(pointLight);
+
+        const axesHelper = new THREE.AxesHelper(0.5);
+        scene.add(axesHelper);
+		
+        const radius = 0.775 / 2;
+        const length = 2.0;
+        const cylGeometry = new THREE.CylinderGeometry(radius, radius, length, 32, 1, true);
+        const cylMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x555555, 
+            wireframe: true, 
+            transparent: true, 
+            opacity: 0.3 
+        });
+        const deviceMesh = new THREE.Mesh(cylGeometry, cylMaterial);
+        deviceMesh.rotation.x = Math.PI / 2;
+        scene.add(deviceMesh);
+
+        const ringGeo = new THREE.TorusGeometry(radius, 0.005, 16, 64);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0x888888 });
+        const ring1 = new THREE.Mesh(ringGeo, ringMat); ring1.position.z = -length / 2; scene.add(ring1);
+        const ring2 = new THREE.Mesh(ringGeo, ringMat); ring2.position.z = length / 2; scene.add(ring2);
+
+        let ionPathData = []; 
+        let electronPathData = []; 
+        let maxSteps = 1000;
+        let isPlaying = false;
+        let preciseStep = 0.0;
+        let basePlaySpeed = 1.0;
+        const speedMultipliers = [0.25, 0.5, 1.0, 2.0, 4.0];
+        let currentMultiplier = speedMultipliers[2];
+        let playSpeed = basePlaySpeed * currentMultiplier;
+        let scaleIon = 1.0;
+        let scaleElec = 1.0;
+        const scaleInfoLabel = document.getElementById('scaleInfo');
+        const NR = 65;
+        const NZ = 257;
+        const R_MAX = 0.3875; 
+
+        let bzMatrix = null; 
+        let fieldGroup = new THREE.Group();
+        scene.add(fieldGroup);
+
+        const ionInput = document.getElementById('ionFile');
+        const electronInput = document.getElementById('electronFile');
+        const bzInput = document.getElementById('bzFile');
+        const colormapSelect = document.getElementById('colormapSelect');
+        const btnStart = document.getElementById('btnStart');
+        const btnStop = document.getElementById('btnStop');
+        const statusIon = document.getElementById('ionStatus');
+        const statusElec = document.getElementById('electronStatus');
+        const statusField = document.getElementById('fieldStatus');
+        const chkShowField = document.getElementById('chkShowField');
+        const legendColor = document.getElementById('legendColor');
+        const legendText = document.getElementById('legendText');
+        const MAX_POINTS = 10000000; 
+        
+        window.setSpeedScale = function(level) {
+            document.querySelectorAll('.btn-scale').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`.btn-scale[data-scale="${level}"]`).classList.add('active');
+
+            if (level === 0) {
+                scaleIon = 1.0; scaleElec = 1.0;
+                scaleInfoLabel.innerText = "Sync (1:1)";
+            } else if (level === 1) {
+                scaleIon = 0.1; scaleElec = 10.0;
+                scaleInfoLabel.innerText = "Ratio 1:100";
+            } else if (level === 2) {
+                scaleIon = 0.01; scaleElec = 100.0;
+                scaleInfoLabel.innerText = "Ratio 1:10000";
+            }
+            
+            if (!isPlaying && ionPathData.length > 0) {
+                updateVisuals(Math.floor(preciseStep));
+            }
+        };
+
+        function setStatus(elementId, isReady) {
+            const el = document.getElementById(elementId);
+            if (isReady) {
+                el.innerText = "✓";
+                el.className = "status-icon text-green-500";
+            } else {
+                el.innerText = "✕";
+                el.className = "status-icon text-red-500";
+            }
+        }
+
+        function createTrajectorySystem(colorHex) {
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(MAX_POINTS * 3); 
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setDrawRange(0, 0); 
+            geometry.attributes.position.usage = THREE.DynamicDrawUsage; 
+
+            const material = new THREE.LineBasicMaterial({ 
+                color: colorHex, 
+                linewidth: 2, 
+                opacity: 0.9, 
+                transparent: true,
+                blending: THREE.NormalBlending 
+            });
+            const line = new THREE.Line(geometry, material);
+            line.frustumCulled = false;
+
+            const sphereGeo = new THREE.SphereGeometry(0.015, 16, 16);
+            const sphereMat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.9 });
+            const head = new THREE.Mesh(sphereGeo, sphereMat);
+            head.visible = false;
+
+            scene.add(line);
+            scene.add(head);
+            return { line, head, geometry };
+        }
+
+        const ionSystem = createTrajectorySystem(0x00ddee);
+        const electronSystem = createTrajectorySystem(0xffd700);
+
+        function divergingColor(val) {
+            val = Math.max(-1, Math.min(1, val));
+            let r, g, b;
+            
+            if (val < 0) {
+                const t = 1 + val; 
+                r = Math.floor(255 * t);
+                g = Math.floor(255 * t);
+                b = 255;
+            } else {
+                const t = val;
+                r = 255;
+                g = Math.floor(255 * (1 - t));
+                b = Math.floor(255 * (1 - t));
+            }
+            return { r, g, b };
+        }
+
+        function jetColor(t) {
+            t = Math.max(0, Math.min(1, t));
+            const r = Math.min(4 * t - 1.5, -4 * t + 4.5);
+            const g = Math.min(4 * t - 0.5, -4 * t + 3.5);
+            const b = Math.min(4 * t + 0.5, -4 * t + 2.5);
+            return {
+                r: Math.floor(Math.max(0, Math.min(1, r)) * 255),
+                g: Math.floor(Math.max(0, Math.min(1, g)) * 255),
+                b: Math.floor(Math.max(0, Math.min(1, b)) * 255)
+            };
+        }
+
+        function parseMatrixFile(text) {
+            const tokens = text.trim().split(/\s+/);
+            const totalRequired = NR * NZ; 
+            
+            if (tokens.length < totalRequired) {
+                console.warn(`Data length mismatch. Expected >${totalRequired}, got ${tokens.length}`);
+                return null;
+            }
+
+            const data = new Float32Array(totalRequired);
+            for(let i=0; i<totalRequired; i++) {
+                data[i] = parseFloat(tokens[i]);
+            }
+            return data;
+        }
+
+        let currentFieldOpacity = 0.4;
+
+        function generateFieldMap() {
+            if (!bzMatrix) return;
+            const mode = colormapSelect.value;
+            const width = NZ;
+            const height = NR;
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            const imageData = ctx.createImageData(width, height);
+            const pixels = imageData.data;
+
+            let maxAbs = 0; 
+            let minVal = Infinity, maxVal = -Infinity; 
+
+            const total = NR * NZ;
+            for(let i=0; i<total; i++) {
+                const val = bzMatrix[i];
+                if(Math.abs(val) > maxAbs) maxAbs = Math.abs(val);
+                if(val < minVal) minVal = val;
+                if(val > maxVal) maxVal = val;
+            }
+            if(maxAbs === 0) maxAbs = 1;
+            const range = maxVal - minVal || 1;
+            const gamma = 0.4; 
+
+            for (let r = 0; r < NR; r++) {
+                for (let z = 0; z < NZ; z++) {
+                    const dataIndex = r * NZ + z;
+                    const val = bzMatrix[dataIndex];
+                    let c = {r:0, g:0, b:0};
+                    
+                    if (mode === 'gamma') {
+                        const normLinear = val / maxAbs;
+                        let t = Math.sign(normLinear) * Math.pow(Math.abs(normLinear), gamma);
+                        c = divergingColor(t);
+                        legendColor.className = "w-3 h-3 bg-gradient-to-r from-blue-700 via-white to-red-600 border border-gray-600";
+                        legendText.innerText = "Bz: (-) 0 (+) [Gamma]";
+                    } else {
+                        let t = (val - minVal) / range;
+                        c = jetColor(t);
+                        legendColor.className = "w-3 h-3 bg-gradient-to-r from-blue-900 via-green-500 to-red-600 border border-gray-600";
+                        legendText.innerText = "Bz: Low -> High [Jet]";
+                    }
+
+                    const imgX = z;
+                    const imgY = (height - 1) - r;
+                    const pixelIndex = (imgY * width + imgX) * 4;
+
+                    pixels[pixelIndex] = c.r;     
+                    pixels[pixelIndex + 1] = c.g; 
+                    pixels[pixelIndex + 2] = c.b; 
+                    pixels[pixelIndex + 3] = 255; 
+                }
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+
+            const symCanvas = document.createElement('canvas');
+            symCanvas.width = width;     
+            symCanvas.height = height * 2; 
+            const sCtx = symCanvas.getContext('2d');
+
+            sCtx.drawImage(canvas, 0, 0);
+            sCtx.save();
+            sCtx.translate(0, height * 2);
+            sCtx.scale(1, -1);
+            sCtx.drawImage(canvas, 0, 0);
+            sCtx.restore();
+
+            const symTexture = new THREE.CanvasTexture(symCanvas);
+            symTexture.minFilter = THREE.LinearFilter;
+            symTexture.magFilter = THREE.LinearFilter;
+
+            const planeGeo = new THREE.PlaneGeometry(length, radius * 2); 
+            const planeMat = new THREE.MeshBasicMaterial({
+                map: symTexture,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: currentFieldOpacity,
+                depthWrite: false
+            });
+
+            while(fieldGroup.children.length > 0) fieldGroup.remove(fieldGroup.children[0]); 
+
+            const p1 = new THREE.Mesh(planeGeo, planeMat);
+            p1.rotation.y = Math.PI / 2;
+            
+            const p2 = new THREE.Mesh(planeGeo, planeMat);
+            p2.rotation.x = Math.PI / 2;
+            p2.rotation.z = Math.PI / 2;
+
+            fieldGroup.add(p1);
+            fieldGroup.add(p2);
+            
+            statusField.innerText = "Bz Rendered";
+            statusField.className = "text-[10px] text-green-400 mb-2";
+            chkShowField.disabled = false;
+            chkShowField.checked = true;
+            fieldGroup.visible = true;
+        }
+
+        bzInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const data = parseMatrixFile(ev.target.result);
+                if(data) {
+                    bzMatrix = data;
+                    setStatus('iconBz', true);
+                    generateFieldMap();
+                } else {
+                    setStatus('iconBz', false);
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        colormapSelect.addEventListener('change', () => {
+            if(bzMatrix) generateFieldMap();
+        });
+
+        const fieldOpacitySlider = document.getElementById('fieldOpacitySlider');
+        const fieldOpacityVal = document.getElementById('fieldOpacityVal');
+        fieldOpacitySlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            currentFieldOpacity = val;
+            fieldOpacityVal.innerText = val.toFixed(1);
+            fieldGroup.children.forEach(mesh => {
+                if(mesh.material) mesh.material.opacity = val;
+            });
+        });
+
+        const partOpacitySlider = document.getElementById('partOpacitySlider');
+        const partOpacityVal = document.getElementById('partOpacityVal');
+        
+        partOpacitySlider.addEventListener('input', (e) => {
+            const index = parseInt(e.target.value);
+            
+            let label = "";
+            let opacity = 0.9;
+            let blending = THREE.NormalBlending;
+
+            if (index === 0) {
+                label = "Dim (0.4x)";
+                opacity = 0.4;
+                blending = THREE.NormalBlending;
+            } else if (index === 1) {
+                label = "Standard (1.0x)";
+                opacity = 0.9;
+                blending = THREE.NormalBlending;
+            } else {
+                label = "Glow (Additive)";
+                opacity = 1.0; 
+                blending = THREE.AdditiveBlending;
+            }
+            partOpacityVal.innerText = label;
+            
+            [ionSystem, electronSystem].forEach(sys => {
+                sys.line.material.opacity = opacity;
+                sys.line.material.blending = blending;
+                sys.line.material.needsUpdate = true;
+                sys.head.material.opacity = opacity;
+                sys.head.material.blending = blending;
+                sys.head.material.needsUpdate = true;
+            });
+        });
+
+        chkShowField.addEventListener('change', (e) => {
+            fieldGroup.visible = e.target.checked;
+        });
+
+        function parseCoordinates(text) {
+            const tokens = text.trim().split(/\s+/);
+            const points = [];
+            for (let i = 0; i < tokens.length; i += 3) {
+                if (i + 2 < tokens.length) {
+                    const x = parseFloat(tokens[i]);
+                    const y = parseFloat(tokens[i+1]);
+                    const z = parseFloat(tokens[i+2]);
+                    if (!isNaN(x)) points.push(new THREE.Vector3(x, y, z));
+                }
+            }
+            return points;
+        }
+
+        function copyDataToBuffer(pathData, system) {
+            const positions = system.geometry.attributes.position.array;
+            const count = pathData.length;
+            
+            if (count > MAX_POINTS) {
+                console.error(`Attempted to load ${count} points, exceeding MAX_POINTS (${MAX_POINTS}). Data truncated.`);
+            }
+
+            const limit = Math.min(count, MAX_POINTS);
+
+            for(let i = 0; i < limit; i++) {
+                const vec = pathData[i];
+                const index = i * 3;
+                positions[index] = vec.x;
+                positions[index + 1] = vec.y;
+                positions[index + 2] = vec.z;
+            }
+            system.geometry.attributes.position.needsUpdate = true;
+            system.geometry.setDrawRange(0, limit); 
+            system.geometry.attributes.position.count = limit;
+        }
+
+		function checkReady() {
+			const hasIon = ionPathData.length > 0;
+			const hasElec = electronPathData.length > 0;
+
+			// Change 1: replace && with || so START is enabled when either particle dataset exists.
+			if (hasIon || hasElec) {
+				btnStart.disabled = false;
+
+				// Change 2: calculate maxSteps dynamically.
+				// If both datasets exist, use the larger length to show the complete trajectory;
+				// if only one exists, use that particle's length.
+				const lenIon = hasIon ? ionPathData.length : 0;
+				const lenElec = hasElec ? electronPathData.length : 0;
+				
+				maxSteps = Math.min(Math.max(lenIon, lenElec), MAX_POINTS);
+
+				document.getElementById('progressSlider').max = Math.max(0, maxSteps - 1);
+				document.getElementById('stepDisplay').innerText = `0 / ${maxSteps}`;
+				basePlaySpeed = 1.0; 
+				updateSpeedSettings();
+			} else {
+				// Keep the button locked when neither dataset exists.
+				btnStart.disabled = true;
+				maxSteps = 0;
+			}
+		}
+
+        function updateSpeedSettings() {
+            playSpeed = basePlaySpeed * currentMultiplier;
+        }
+
+        function handleFile(file, isIon) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = parseCoordinates(e.target.result);
+                let sys = isIon ? ionSystem : electronSystem;
+
+                copyDataToBuffer(data, sys); 
+
+                if (isIon) {
+                    ionPathData = data;
+                    statusIon.innerText = `Loaded: ${data.length} Steps`;
+                    statusIon.className = "text-[10px] text-green-400 mt-1 pl-1";
+                    setStatus('iconIon', true);
+                } else {
+                    electronPathData = data;
+                    statusElec.innerText = `Loaded: ${data.length} Steps`;
+                    statusElec.className = "text-[10px] text-green-400 mt-1 pl-1";
+                    setStatus('iconElec', true);
+                }
+                checkReady();
+            };
+            reader.readAsText(file);
+        }
+
+        ionInput.addEventListener('change', (e) => handleFile(e.target.files[0], true));
+        electronInput.addEventListener('change', (e) => handleFile(e.target.files[0], false));
+
+        function updateVisuals(masterStep) {
+            
+            const ionPathLength = ionPathData.length;
+            const elecPathLength = electronPathData.length;
+
+            let ionStep = Math.floor(masterStep * scaleIon);
+            if (ionStep >= ionPathLength) ionStep = ionPathLength - 1;
+            
+            let elecStep = Math.floor(masterStep * scaleElec);
+            if (elecStep >= elecPathLength) elecStep = elecPathLength - 1;
+
+            if (ionPathLength > 0 && ionStep >= 0) {
+                ionSystem.geometry.setDrawRange(0, ionStep + 1);
+                ionSystem.head.position.copy(ionPathData[ionStep]);
+                ionSystem.head.visible = true;
+            } else {
+                ionSystem.head.visible = false;
+            }
+
+            if (elecPathLength > 0 && elecStep >= 0) {
+                electronSystem.geometry.setDrawRange(0, elecStep + 1);
+                electronSystem.head.position.copy(electronPathData[elecStep]);
+                electronSystem.head.visible = true;
+            } else {
+                electronSystem.head.visible = false;
+            }
+
+            document.getElementById('stepDisplay').innerText = `${masterStep} / ${maxSteps}`;
+            document.getElementById('progressSlider').value = masterStep;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            if (isPlaying) {
+                preciseStep += playSpeed;
+                
+                if (preciseStep >= maxSteps) {
+                    if (document.getElementById('chkLoop').checked) {
+                        preciseStep = 0;
+                        ionSystem.geometry.setDrawRange(0, 0);
+                        electronSystem.geometry.setDrawRange(0, 0);
+                    } else {
+                        preciseStep = maxSteps - 1;
+                        stopAnimation();
+                    }
+                }
+                updateVisuals(Math.floor(preciseStep));
+            }
+        }
+
+        function startAnimation() {
+            if (!isPlaying) {
+                isPlaying = true;
+                btnStart.disabled = true;
+                btnStop.disabled = false;
+            }
+        }
+        function stopAnimation() {
+            isPlaying = false;
+            btnStart.disabled = false;
+            btnStop.disabled = true;
+        }
+
+        btnStart.addEventListener('click', startAnimation);
+        btnStop.addEventListener('click', stopAnimation);
+        document.getElementById('progressSlider').addEventListener('input', (e) => {
+            preciseStep = parseInt(e.target.value);
+            updateVisuals(preciseStep);
+            if (!isPlaying) stopAnimation();
+        });
+        document.getElementById('speedSlider').addEventListener('input', (e) => {
+            const index = parseInt(e.target.value);
+            currentMultiplier = speedMultipliers[index];
+            updateSpeedSettings();
+            document.getElementById('speedVal').innerText = `${currentMultiplier}x`;
+        });
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        document.getElementById('btnDemo').addEventListener('click', () => {
+            ionPathData = []; electronPathData = [];
+            const demoSteps = 2000;
+            for(let i=0; i<demoSteps; i++) {
+                const t = i/500;
+                ionPathData.push(new THREE.Vector3(Math.cos(t)*0.3, Math.sin(t)*0.3, (i/demoSteps)*2-1));
+                electronPathData.push(new THREE.Vector3(Math.cos(t*10)*0.1, Math.sin(t*10)*0.1, (i/demoSteps)*2-1));
+            }
+
+            copyDataToBuffer(ionPathData, ionSystem);
+            copyDataToBuffer(electronPathData, electronSystem);
+
+            maxSteps = demoSteps;
+            statusIon.innerText = `Demo Data (${demoSteps})`; 
+            statusElec.innerText = `Demo Data (${demoSteps})`;
+            setStatus('iconIon', true);
+            setStatus('iconElec', true);
+            checkReady(); updateVisuals(0);
+        });
+        animate();
+    </script>
+</body>
+</html>
